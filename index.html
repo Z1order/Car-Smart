@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CarSmart – Car Docs & Maintenance Tracker</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --card: #ffffff;
+      --ink: #0b1220;
+      --muted: #5b6474;
+      --brand: #0a84ff; /* iOS blue */
+      --brand-ink: #004ea7;
+      --danger: #ff3b30;
+      --warning: #ff9f0a;
+      --success: #34c759;
+      --shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.3;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
+      height: 100dvh;
+      padding: 16px;
+    }
+    @media (max-width: 900px){
+      .app { grid-template-columns: 1fr; height: auto; }
+      .panel.cars { order: 2; }
+      .panel.detail { order: 1; }
+    }
+
+    .panel {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+    .title {
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      margin: 0 0 12px;
+    }
+    .toolbar {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    }
+    .btn {
+      appearance: none; border: 0; cursor: pointer;
+      background: var(--brand); color: white; font-weight: 700;
+      padding: 10px 14px; border-radius: 12px; box-shadow: var(--shadow);
+      transition: transform .06s ease, filter .06s ease, background .2s ease;
+    }
+    .btn:hover { filter: brightness(1.05); }
+    .btn:active { transform: translateY(1px); }
+    .btn.secondary { background: #e7eefc; color: #0b3b9c; }
+    .btn.ghost { background: transparent; color: var(--brand); box-shadow: none; border: 2px solid #e7eefc; }
+    .btn.danger { background: var(--danger); }
+
+    .field { display: grid; gap: 6px; margin-bottom: 12px; }
+    .label { font-weight: 700; color: var(--muted); font-size: 12px; }
+    input[type="text"], input[type="date"], input[type="number"], select, textarea {
+      width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #e5e7eb; background: #fbfdff;
+      outline: none; font-size: 14px;
+    }
+    textarea { min-height: 80px; resize: vertical; }
+
+    .list { display: grid; gap: 10px; margin-top: 10px; }
+    .item { background: #f8fbff; border: 1px solid #e6eefc; padding: 12px; border-radius: 14px; display: grid; gap: 4px; }
+    .item .name { font-weight: 800; }
+    .item .sub { color: var(--muted); font-size: 12px; }
+
+    .row { display: flex; gap: 10px; }
+    .row > * { flex: 1; }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip { font-size: 12px; padding: 6px 8px; border-radius: 999px; background: #eef5ff; color: #0b3b9c; border: 1px solid #dbe7ff; }
+
+    .badge { font-size: 12px; padding: 4px 8px; border-radius: 999px; font-weight: 800; }
+    .badge.due { background: #fff3e6; color: #8a3b00; border: 1px solid #ffe4c2; }
+    .badge.overdue { background: #ffecec; color: #8a0f04; border: 1px solid #ffd1cf; }
+    .badge.ok { background: #e9f9ef; color: #0b6b37; border: 1px solid #c7efda; }
+
+    .divider { height: 1px; background: #eef2ff; margin: 12px 0; }
+
+    .empty {
+      border: 2px dashed #dbe7ff; border-radius: var(--radius); padding: 20px; text-align: center; color: var(--muted);
+    }
+
+    .doc-thumb { display: grid; grid-template-columns: 60px 1fr auto; align-items: center; gap: 10px; }
+    .doc-thumb img { width: 60px; height: 60px; object-fit: cover; border-radius: 10px; border: 1px solid #e6eefc; }
+
+    .searchbar { display: flex; align-items: center; gap: 8px; background: #f3f6fc; border: 1px solid #e7eefc; padding: 10px 12px; border-radius: 999px; }
+    .searchbar input { border: none; background: transparent; padding: 0; }
+
+    .sticky-actions { position: sticky; top: 8px; z-index: 5; background: var(--card); padding-bottom: 10px; }
+
+    .footer { color: var(--muted); font-size: 12px; margin-top: 8px; }
+    .link { color: var(--brand); font-weight: 700; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- LEFT: Cars & quick actions -->
+    <aside class="panel cars">
+      <div class="sticky-actions">
+        <h1 class="title">CarSmart</h1>
+        <div class="toolbar">
+          <button class="btn" id="addCarBtn">＋ New Car</button>
+          <button class="btn secondary" id="exportBtn">Export</button>
+          <label class="btn ghost" for="importFile">Import</label>
+          <input type="file" id="importFile" accept="application/json" style="display:none" />
+        </div>
+        <div class="searchbar" style="margin-top:10px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 21l-4.3-4.3" stroke="#8aa1c4" stroke-width="2" stroke-linecap="round"/><circle cx="10.5" cy="10.5" r="7.5" stroke="#8aa1c4" stroke-width="2"/></svg>
+          <input id="search" type="text" placeholder="Search make, model, plate, VIN…" />
+        </div>
+      </div>
+      <div id="carList" class="list" style="margin-top:12px;"></div>
+      <div class="footer">Data is stored locally in your browser (offline). Use Export/Import to back up or move devices.</div>
+    </aside>
+
+    <!-- RIGHT: Details -->
+    <main class="panel detail">
+      <div id="detail"></div>
+    </main>
+  </div>
+
+  <template id="carFormTmpl">
+    <div>
+      <h2 class="title">Add / Edit Car</h2>
+      <div class="row">
+        <div class="field"><label class="label">Make</label><input id="cf-make" type="text" placeholder="e.g., Toyota" required></div>
+        <div class="field"><label class="label">Model</label><input id="cf-model" type="text" placeholder="e.g., Corolla" required></div>
+      </div>
+      <div class="row">
+        <div class="field"><label class="label">Year</label><input id="cf-year" type="number" min="1900" max="2100" placeholder="e.g., 2019"></div>
+        <div class="field"><label class="label">Trim / Color</label><input id="cf-trim" type="text" placeholder="e.g., SE, Blue" ></div>
+      </div>
+      <div class="row">
+        <div class="field"><label class="label">VIN</label><input id="cf-vin" type="text" placeholder="17-char VIN"></div>
+        <div class="field"><label class="label">License Plate</label><input id="cf-plate" type="text" placeholder="e.g., 8ABC123"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label class="label">Registration Expiry</label><input id="cf-regExp" type="date"></div>
+        <div class="field"><label class="label">Insurance Expiry</label><input id="cf-insExp" type="date"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label class="label">Insurer</label><input id="cf-insurer" type="text" placeholder="e.g., GEICO"></div>
+        <div class="field"><label class="label">Policy #</label><input id="cf-policy" type="text" placeholder="Policy number"></div>
+      </div>
+      <div class="field"><label class="label">Notes</label><textarea id="cf-notes" placeholder="Any extra details"></textarea></div>
+      <div class="toolbar">
+        <button class="btn" id="saveCarBtn">Save Car</button>
+        <button class="btn ghost" id="cancelCarBtn">Cancel</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="detailTmpl">
+    <div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap: wrap;">
+        <div>
+          <h2 class="title" id="carTitle"></h2>
+          <div class="chips" id="carChips"></div>
+        </div>
+        <div class="toolbar">
+          <button class="btn" id="addServiceBtn">Add Service</button>
+          <button class="btn" id="addReminderBtn">Add Reminder</button>
+          <label class="btn secondary" for="docFile">Add Document</label>
+          <input type="file" id="docFile" accept="image/*,application/pdf" style="display:none" />
+          <button class="btn ghost" id="editCarBtn">Edit</button>
+          <button class="btn danger" id="deleteCarBtn">Delete</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <section>
+        <h3 class="title" style="font-size:18px">Documents</h3>
+        <div id="docs" class="list"></div>
+        <div id="docsEmpty" class="empty" style="display:none;">No documents yet. Use <b>Add Document</b> to attach registration, insurance card, etc.</div>
+      </section>
+
+      <div class="divider"></div>
+
+      <section>
+        <h3 class="title" style="font-size:18px">Service History</h3>
+        <div id="services" class="list"></div>
+        <div id="servicesEmpty" class="empty" style="display:none;">No services recorded. Add oil changes, tires, brakes, inspections…</div>
+      </section>
+
+      <div class="divider"></div>
+
+      <section>
+        <h3 class="title" style="font-size:18px">Reminders</h3>
+        <div id="reminders" class="list"></div>
+        <div id="remindersEmpty" class="empty" style="display:none;">No reminders. Create ones for registration, insurance, oil, etc.</div>
+      </section>
+    </div>
+  </template>
+
+  <template id="serviceFormTmpl">
+    <div>
+      <h3 class="title" style="font-size:18px">Add Service</h3>
+      <div class="row">
+        <div class="field"><label class="label">Date</label><input id="sv-date" type="date"></div>
+        <div class="field"><label class="label">Type</label>
+          <select id="sv-type">
+            <option>Oil Change</option>
+            <option>Tire Rotation</option>
+            <option>Brake Service</option>
+            <option>Battery</option>
+            <option>Inspection</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field"><label class="label">Mileage</label><input id="sv-mi" type="number" placeholder="e.g., 45200"></div>
+        <div class="field"><label class="label">Cost ($)</label><input id="sv-cost" type="number" step="0.01" placeholder="e.g., 89.99"></div>
+      </div>
+      <div class="field"><label class="label">Notes</label><textarea id="sv-notes" placeholder="Optional notes"></textarea></div>
+      <div class="toolbar"><button class="btn" id="saveServiceBtn">Save</button> <button class="btn ghost" id="cancelServiceBtn">Cancel</button></div>
+    </div>
+  </template>
+
+  <template id="reminderFormTmpl">
+    <div>
+      <h3 class="title" style="font-size:18px">Add Reminder</h3>
+      <div class="row">
+        <div class="field"><label class="label">Title</label><input id="rm-title" type="text" placeholder="e.g., Renew Registration"></div>
+        <div class="field"><label class="label">Due Date</label><input id="rm-date" type="date"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label class="label">Repeat</label>
+          <select id="rm-repeat">
+            <option value="none">Does not repeat</option>
+            <option value="6m">Every 6 months</option>
+            <option value="12m">Every 12 months</option>
+            <option value="24m">Every 24 months</option>
+          </select>
+        </div>
+        <div class="field"><label class="label">Mileage (optional)</label><input id="rm-mi" type="number" placeholder="Next at 50,000"></div>
+      </div>
+      <div class="field"><label class="label">Notes</label><textarea id="rm-notes" placeholder="Optional"></textarea></div>
+      <div class="toolbar"><button class="btn" id="saveReminderBtn">Save</button> <button class="btn ghost" id="cancelReminderBtn">Cancel</button></div>
+    </div>
+  </template>
+
+  <script>
+    // --- Simple localStorage DB ---
+    const DB_KEY = 'carsmart.db.v1';
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+    const db = {
+      data: { cars: [], selectedId: null },
+      load() {
+        try { this.data = JSON.parse(localStorage.getItem(DB_KEY)) || this.data; }
+        catch { /* ignore */ }
+      },
+      save() { localStorage.setItem(DB_KEY, JSON.stringify(this.data)); },
+      uid() { return Math.random().toString(36).slice(2, 10); }
+    };
+
+    // --- Utilities ---
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : '';
+    const daysUntil = (d) => {
+      if(!d) return null; const t = new Date(); t.setHours(0,0,0,0);
+      const x = new Date(d); x.setHours(0,0,0,0);
+      return Math.round((x - t) / 86400000);
+    };
+    const statusBadge = (dueISO) => {
+      const n = daysUntil(dueISO);
+      if(n == null) return '';
+      if(n < 0) return `<span class="badge overdue">Overdue ${Math.abs(n)}d</span>`;
+      if(n <= 14) return `<span class="badge due">Due in ${n}d</span>`;
+      return `<span class="badge ok">OK</span>`;
+    };
+
+    // --- Rendering ---
+    function render() {
+      renderCarList();
+      const car = db.data.cars.find(c => c.id === db.data.selectedId);
+      if(car) renderDetail(car); else renderEmptyDetail();
+    }
+
+    function renderCarList() {
+      const list = $('#carList');
+      const q = ($('#search').value || '').toLowerCase();
+      const cars = db.data.cars
+        .map(c => ({...c, score: [c.make, c.model, c.plate, c.vin].join(' ').toLowerCase()}))
+        .filter(c => !q || c.score.includes(q));
+      list.innerHTML = '';
+      if(!cars.length){
+        list.innerHTML = `<div class="empty">No cars yet. Click <b>New Car</b> to get started.</div>`;
+        return;
+      }
+      for(const c of cars){
+        const nextReg = statusBadge(c.registrationExpiry);
+        const nextIns = statusBadge(c.insuranceExpiry);
+        const el = document.createElement('div');
+        el.className = 'item';
+        el.innerHTML = `
+          <div class="name">${c.year || ''} ${c.make || ''} ${c.model || ''}</div>
+          <div class="sub">Plate <b>${c.plate || '—'}</b> • VIN <b>${c.vin || '—'}</b></div>
+          <div class="chips">
+            <span class="chip">Reg: ${c.registrationExpiry ? fmtDate(c.registrationExpiry) : '—'} ${nextReg}</span>
+            <span class="chip">Ins: ${c.insuranceExpiry ? fmtDate(c.insuranceExpiry) : '—'} ${nextIns}</span>
+          </div>`;
+        el.addEventListener('click', () => { db.data.selectedId = c.id; db.save(); render(); });
+        list.appendChild(el);
+      }
+    }
+
+    function renderEmptyDetail(){
+      $('#detail').innerHTML = `<div class="empty">Select a car to view details.</div>`;
+    }
+
+    function renderDetail(car){
+      const root = document.importNode($('#detailTmpl').content, true);
+      const title = `${car.year || ''} ${car.make || ''} ${car.model || ''}`.trim() || 'Untitled Car';
+      root.querySelector('#carTitle').textContent = title;
+      const chips = root.querySelector('#carChips');
+      chips.innerHTML = '';
+      const chip = (label, value) => `<span class="chip"><b>${label}:</b> ${value || '—'}</span>`;
+      chips.insertAdjacentHTML('beforeend', chip('Plate', car.plate));
+      chips.insertAdjacentHTML('beforeend', chip('VIN', car.vin));
+      if(car.trim) chips.insertAdjacentHTML('beforeend', chip('Trim', car.trim));
+      if(car.insurer) chips.insertAdjacentHTML('beforeend', chip('Insurer', car.insurer));
+
+      // Docs
+      const docsWrap = root.querySelector('#docs');
+      const docsEmpty = root.querySelector('#docsEmpty');
+      if(!car.docs?.length){ docsEmpty.style.display = 'block'; }
+      else {
+        for(const d of car.docs){
+          const div = document.createElement('div');
+          div.className = 'item doc-thumb';
+          const isImg = d.mime?.startsWith('image/');
+          const thumb = isImg ? `<img src="${d.data}" alt="${d.name}">` : `<img alt="PDF" src="data:image/svg+xml;base64,${btoa(`<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60'><rect width='100%' height='100%' fill='%23eef5ff'/><text x='50%' y='55%' font-family='sans-serif' font-size='14' text-anchor='middle' fill='%230b3b9c'>PDF</text></svg>`)}">`;
+          div.innerHTML = `${thumb}
+            <div>
+              <div class="name">${d.name}</div>
+              <div class="sub">Added ${fmtDate(d.addedAt)}</div>
+            </div>
+            <div class="toolbar">
+              <a class="btn ghost" href="${d.data}" download="${d.name}">Download</a>
+              <button class="btn danger" data-id="${d.id}">Delete</button>
+            </div>`;
+          div.querySelector('.btn.danger').addEventListener('click', () => { car.docs = car.docs.filter(x => x.id !== d.id); db.save(); render(); });
+          docsWrap.appendChild(div);
+        }
+      }
+
+      // Services
+      const svWrap = root.querySelector('#services');
+      const svEmpty = root.querySelector('#servicesEmpty');
+      const services = (car.services || []).slice().sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+      if(!services.length) { svEmpty.style.display = 'block'; }
+      else for(const s of services){
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `
+          <div class="name">${s.type} • ${s.mileage ? (s.mileage.toLocaleString() + ' mi') : ''}</div>
+          <div class="sub">${fmtDate(s.date)} • ${s.cost ? `$${Number(s.cost).toFixed(2)}` : '—'}</div>
+          ${s.notes ? `<div class="sub">${s.notes}</div>` : ''}
+          <div class="toolbar"><button class="btn ghost" data-del="${s.id}">Delete</button></div>`;
+        row.querySelector('[data-del]').addEventListener('click', () => { car.services = car.services.filter(x => x.id !== s.id); db.save(); render(); });
+        svWrap.appendChild(row);
+      }
+
+      // Reminders
+      const rmWrap = root.querySelector('#reminders');
+      const rmEmpty = root.querySelector('#remindersEmpty');
+      const reminders = (car.reminders || []).slice().sort((a,b)=> (a.due||'').localeCompare(b.due||''));
+      if(!reminders.length) { rmEmpty.style.display = 'block'; }
+      else for(const r of reminders){
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            <div>
+              <div class="name">${r.title}</div>
+              <div class="sub">Due ${fmtDate(r.due)} ${r.mileage ? `• at ${Number(r.mileage).toLocaleString()} mi` : ''}</div>
+              ${r.notes ? `<div class="sub">${r.notes}</div>` : ''}
+            </div>
+            <div>${statusBadge(r.due)}</div>
+          </div>
+          <div class="toolbar">
+            <button class="btn secondary" data-done="${r.id}">Mark Done</button>
+            <button class="btn ghost" data-del="${r.id}">Delete</button>
+          </div>`;
+        row.querySelector('[data-del]').addEventListener('click', () => { car.reminders = car.reminders.filter(x => x.id !== r.id); db.save(); render(); });
+        row.querySelector('[data-done]').addEventListener('click', () => {
+          // On complete, if repeating, roll the due date
+          if(r.repeat && r.repeat !== 'none' && r.due){
+            const d = new Date(r.due);
+            const addMonths = r.repeat === '6m' ? 6 : (r.repeat === '12m' ? 12 : 24);
+            d.setMonth(d.getMonth() + addMonths);
+            r.due = d.toISOString().slice(0,10);
+          } else {
+            // otherwise remove
+            car.reminders = car.reminders.filter(x => x.id !== r.id);
+          }
+          db.save(); render();
+        });
+        rmWrap.appendChild(row);
+      }
+
+      // Hook up actions
+      const frag = document.createElement('div');
+      frag.appendChild(root);
+      const detail = $('#detail');
+      detail.innerHTML = '';
+      detail.appendChild(frag);
+
+      $('#editCarBtn').addEventListener('click', () => openCarForm(car));
+      $('#deleteCarBtn').addEventListener('click', () => { if(confirm('Delete this car?')) { db.data.cars = db.data.cars.filter(x => x.id !== car.id); db.data.selectedId = db.data.cars[0]?.id || null; db.save(); render(); } });
+      $('#addServiceBtn').addEventListener('click', () => openServiceForm(car));
+      $('#addReminderBtn').addEventListener('click', () => openReminderForm(car));
+      $('#docFile').addEventListener('change', (e) => handleDocUpload(e, car));
+    }
+
+    function openCarForm(car){
+      const node = document.importNode($('#carFormTmpl').content, true);
+      const d = $('#detail'); d.innerHTML = ''; d.appendChild(node);
+      // Prefill if editing
+      if(car){
+        $('#cf-make').value = car.make || '';
+        $('#cf-model').value = car.model || '';
+        $('#cf-year').value = car.year || '';
+        $('#cf-trim').value = car.trim || '';
+        $('#cf-vin').value = car.vin || '';
+        $('#cf-plate').value = car.plate || '';
+        $('#cf-regExp').value = car.registrationExpiry || '';
+        $('#cf-insExp').value = car.insuranceExpiry || '';
+        $('#cf-insurer').value = car.insurer || '';
+        $('#cf-policy').value = car.policy || '';
+        $('#cf-notes').value = car.notes || '';
+      }
+      $('#saveCarBtn').addEventListener('click', () => {
+        const c = car || { id: db.uid(), docs: [], services: [], reminders: [] };
+        c.make = $('#cf-make').value.trim();
+        c.model = $('#cf-model').value.trim();
+        c.year = $('#cf-year').value.trim();
+        c.trim = $('#cf-trim').value.trim();
+        c.vin = $('#cf-vin').value.trim();
+        c.plate = $('#cf-plate').value.trim();
+        c.registrationExpiry = $('#cf-regExp').value || null;
+        c.insuranceExpiry = $('#cf-insExp').value || null;
+        c.insurer = $('#cf-insurer').value.trim();
+        c.policy = $('#cf-policy').value.trim();
+        c.notes = $('#cf-notes').value.trim();
+
+        if(!car) db.data.cars.unshift(c);
+        db.data.selectedId = c.id;
+        db.save();
+        render();
+      });
+      $('#cancelCarBtn').addEventListener('click', render);
+    }
+
+    function openServiceForm(car){
+      const node = document.importNode($('#serviceFormTmpl').content, true);
+      const d = $('#detail'); d.innerHTML = ''; d.appendChild(node);
+      // Defaults
+      $('#sv-date').valueAsNumber = Date.now() - (new Date().getTimezoneOffset()*60000);
+      $('#saveServiceBtn').addEventListener('click', () => {
+        car.services = car.services || [];
+        car.services.push({ id: db.uid(), date: $('#sv-date').value || null, type: $('#sv-type').value, mileage: Number($('#sv-mi').value || 0) || null, cost: Number($('#sv-cost').value || 0) || null, notes: $('#sv-notes').value.trim() || null });
+        db.save(); render();
+      });
+      $('#cancelServiceBtn').addEventListener('click', render);
+    }
+
+    function openReminderForm(car){
+      const node = document.importNode($('#reminderFormTmpl').content, true);
+      const d = $('#detail'); d.innerHTML = ''; d.appendChild(node);
+      $('#rm-date').valueAsNumber = Date.now() - (new Date().getTimezoneOffset()*60000);
+      $('#saveReminderBtn').addEventListener('click', () => {
+        car.reminders = car.reminders || [];
+        car.reminders.push({ id: db.uid(), title: $('#rm-title').value.trim() || 'Reminder', due: $('#rm-date').value || null, repeat: $('#rm-repeat').value, mileage: Number($('#rm-mi').value || 0) || null, notes: $('#rm-notes').value.trim() || null });
+        db.save(); render();
+      });
+      $('#cancelReminderBtn').addEventListener('click', render);
+    }
+
+    function handleDocUpload(e, car){
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if(!file) return;
+      if(file.size > 6 * 1024 * 1024){
+        alert('Please choose a file smaller than 6 MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        car.docs = car.docs || [];
+        car.docs.push({ id: db.uid(), name: file.name, mime: file.type, data: reader.result, addedAt: new Date().toISOString().slice(0,10) });
+        db.save(); render();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Export / Import
+    function exportJSON(){
+      const blob = new Blob([JSON.stringify(db.data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'carsmart-backup.json'; a.click();
+      URL.revokeObjectURL(url);
+    }
+    function importJSON(file){
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const fresh = JSON.parse(reader.result);
+          if(!fresh || !Array.isArray(fresh.cars)) throw new Error('Invalid file');
+          db.data = fresh; db.save(); render();
+        } catch(err){ alert('Could not import file.'); }
+      };
+      reader.readAsText(file);
+    }
+
+    // Event wiring
+    $('#addCarBtn').addEventListener('click', () => openCarForm());
+    $('#exportBtn').addEventListener('click', exportJSON);
+    $('#importFile').addEventListener('change', (e)=> { const f = e.target.files?.[0]; e.target.value=''; if(f) importJSON(f); });
+    $('#search').addEventListener('input', renderCarList);
+
+    // Bootstrap
+    db.load();
+    if(!db.data.cars.length){
+      // Optional sample car to show layout
+      const id = db.uid();
+      db.data.cars.push({ id, make: 'Toyota', model: 'Corolla', year: '2019', plate: '8ABC123', vin: 'JTDBU4EE9B9123456', insurer: 'GEICO', policy: 'ABC-123-XYZ', registrationExpiry: new Date(new Date().setMonth(new Date().getMonth()+2)).toISOString().slice(0,10), insuranceExpiry: new Date(new Date().setMonth(new Date().getMonth()+5)).toISOString().slice(0,10), docs: [], services: [], reminders: [{ id: db.uid(), title: 'Renew Registration', due: new Date(new Date().setMonth(new Date().getMonth()+2)).toISOString().slice(0,10), repeat: '12m', mileage: null, notes: 'DMV online' }] });
+      db.data.selectedId = id;
+      db.save();
+    }
+    render();
+  </script>
+</body>
+</html>
